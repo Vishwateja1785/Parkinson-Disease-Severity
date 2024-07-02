@@ -1,0 +1,390 @@
+```{r} 
+# Load the Packages. 
+library(readr) 
+library(ggplot2) 
+library(dplyr) 
+library(car) 
+library(corrplot) 
+library(alr4)
+library(glmnet)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(vip)
+library(caret)
+library(factoextra)
+library(FactoMineR)
+# Load the parkinsons_updrs set.
+setwd("D:/DePaul/Quarter 3/Advanced Data Analysis and Regression/Final Project/parkinsons+telemonitoring")
+parkinsons_updrs <- read.csv(file = "parkinsons_updrs.data", header = TRUE, sep=",") 
+# Use a head() function to explore the rows and columns. 
+head(parkinsons_updrs) 
+# Display the dimension of the parkinsons_updrs set. 
+dim(parkinsons_updrs) 
+``` 
+
+```{r} 
+# Use a set.seed() function to generate a sequence of random numbers. 
+set.seed(888) 
+# Create a new parkinsons_updrs frame called park. 
+park <- sample_n(parkinsons_updrs, size = 1000, replace = FALSE, weight = NULL) 
+# Thus sample_n function() is selecting a random sequence of rows by using a Simple Random sampling method from an existing or original data set. 
+# Use a head() function to extract rows and columns of the new data set. 
+head(park)
+```
+
+
+```{r} 
+# Display the dimension of the park. 
+#dim(park) 
+names(park) 
+```
+
+#Question1- Applying Linear Regression model
+```{r} 
+# Create an initial model. 
+fit0.park <- lm(total_UPDRS ~ 1, data = park) 
+# Create a full model with all the predictors. 
+fit1.park <- lm(total_UPDRS ~ ., data = park) 
+# After removing some unrelated variables such as motor_UPDRS, test_time, and subject. This is our new full model. 
+fit2.park <- update(fit1.park, . ~ .-motor_UPDRS- subject.-test_time , data = park) 
+summary(fit2.park) 
+```
+
+```{r} 
+# Round up the coefficients by 2 decimal places. 
+round(coef(summary(fit2.park)), 2) 
+``` 
+
+# Run a Global F-test to compare two models. 
+```{r} 
+# Comparing a full model with all the predictors to the null model or an initial model. 
+anova(fit0.park, fit2.park) 
+``` 
+
+# Show a marginal relationship between the potential predictors and response. 
+```{r} 
+# Use a pair() function to show the marginal relationship. 
+# Initialize a variable called Pair1 to display the marginal relationship between a response and the predictors. 
+Pair1 <- pairs(total_UPDRS ~ age + Jitter... + Jitter.Abs. + 
+ Jitter.RAP + Jitter.PPQ5 + Jitter.DDP + Shimmer + Shimmer.dB., data = park, lower.panel = NULL) 
+Pair1 
+# Initialize a variable called Pair2 to display the marginal relationship between a response and the predictors. 
+Pair2 <- pairs(total_UPDRS ~ Shimmer.APQ3 + Shimmer.APQ5 + Shimmer.APQ11 + Shimmer.DDA + 
+ NHR + HNR + RPDE + DFA + PPE, data = park,lower.panel = NULL)
+Pair2 
+``` 
+
+
+#Checking Multicollinearity issue and Correlation Plot:
+```{r} 
+# Check Multi-collinearity issue in the data set. 
+round(vif(fit2.park), 2) 
+# Initialize a variable called m that rounds up the correlation by two decimal places. 
+m <- round(cor(park),2) 
+# Construct a Corrplot. 
+corrplot(m, type = "upper", order = "hclust", 
+ tl.col = "black", tl.srt = 45, tl.cex= 0.7, outline= T) 
+# Plot a histogram. 
+hist(fit2.park$residuals, freq = FALSE) 
+lines(density(fit2.park$residuals), col = "red") 
+``` 
+
+# Diagnostic plots 
+```{r} 
+# Use a par() function to readjust the size of the diagnostic plots. 
+par(mfrow = c(2,2), mar = c(2,2,2,2)) 
+# Use a plot() function to display the diagnostic Plots of the Full model. 
+plot(fit2.park, which = 1:4) 
+# Construct an Influence index plot. 
+influenceIndexPlot(fit2.park, vars = c("hat", "cook"), id = TRUE) 
+``` 
+
+# Influential points 
+```{r} 
+# Set the number of parameters. 
+p <- ncol(park) 
+# Compute the sample size. 
+n <- nrow(park) 
+# Determine the Leverage points. 
+park.hat <- hatvalues(fit2.park) 
+# Compute the sum of the leverage points. 
+sum(park.hat) 
+# Determine an Outliers. 
+park.out <- rstandard(fit2.park) 
+# Compute the sum of the outlier points. 
+sum(abs(park.out) > 2) # Set threshold 3 
+``` 
+
+# Plot Leverage points and Outliers. 
+```{r} 
+# Create a scatter plot. 
+plot(hatvalues(fit2.park), rstandard(fit2.park), xlab = "Leverage", ylab = "Standardized Residuals") 
+abline(v = 2*(p+1)/n, lty = 2, lwd = 2, col = "red") # Set threshold 2*(p+1)/n 
+abline(h = c(-2,2), lty = 2, lwd = 2, col = "blue") 
+``` 
+
+# Variable Selection Technique 
+```{r} 
+# Use a stepwise selection method. 
+step(fit2.park, scope = list(lower = fit0.park, upper = fit2.park), trace = 0) 
+``` 
+
+# Fit a final model. 
+```{r}
+# RQ-1
+# Final model. 
+fit3.park<- lm(total_UPDRS ~ age + sex + Jitter.Abs. + Jitter.PPQ5 + 
+ Jitter.DDP + Shimmer.APQ3 + HNR + RPDE + DFA + PPE, data = park) 
+summary(fit3.park) 
+``` 
+
+```{r} 
+# Round up the coefficients by 2 decimal places. 
+round(coef(summary(fit3.park)), 2) 
+``` 
+# Check assumptions. 
+```{r} 
+# Use a plot() function to check the assumptions of a final model. 
+plot(fit3.park, which = 1:4) 
+``` 
+
+# Transformation of Predictors 
+```{r} 
+# Use a powertransform() function to find out the transform for the predictors. 
+ptt <- powerTransform(cbind (age , Jitter.Abs. , Jitter.PPQ5 , 
+ Jitter.DDP , Shimmer.APQ3 , HNR , RPDE , DFA , PPE) ~ 1, park) 
+# (sex is a categorical variable). 
+# Use a summary() function. 
+summary(ptt) 
+``` 
+
+```{r} 
+# Transforming the predictors of the final model. 
+fit4.park <- lm(total_UPDRS ~ (age^2) +sex + log(Jitter.Abs.)+log(Jitter.PPQ5)+ 
+ log(Jitter.DDP)+ log(Shimmer.APQ3) + (HNR^2)+ RPDE + log(DFA) +log( PPE ) , data = park)
+# Use a boxCox() function to verify the transformation. 
+boxCox(fit4.park, lambda = seq(-2,2,0.5)) 
+# Identifying the transformation for response. 
+summary(powerTransform(fit4.park)) 
+``` 
+# Transformation model. 
+```{r} 
+# Refit a model. 
+fit5.park <- lm(sqrt(total_UPDRS) ~ age + I(age^2) + sex + log(Jitter.Abs.) + log(Jitter.PPQ5) + 
+log(Jitter.DDP)+ log(Shimmer.APQ3) + HNR + I(HNR^2)+ RPDE + log(DFA) + log( PPE ) , data = park) 
+round(coef(summary(fit5.park)),4) 
+``` 
+
+```{r} 
+#RQ-1	 
+# Set the margin. 
+par(mfrow = c(2,2), mar = c(3,3,3,3)) 
+# Plots before transformation. 
+plot(fit3.park, which = 1:4)
+
+# Plots after transformation. 
+plot(fit5.park, which = 1:4) 
+``` 
+
+# Scatterplot Matrix 
+```{r} 
+# Use a scatterplot matrix() function. 
+Scatter1 <- scatterplotMatrix(~ sqrt(total_UPDRS) + age + I(age^2) +log(Jitter.Abs.)+log(Jitter.PPQ5)+ 
+log(Jitter.DDP), data = park, smooth = FALSE, pch = 19,lower.panel = NULL, col = "#E7B800", main = 
+"Scatterplot Matrix") 
+Scatter1 
+
+# Use a scatterplot matrix () function. 
+Scatter2 <- scatterplotMatrix(~ sqrt(total_UPDRS) + log(Shimmer.APQ3) + HNR +I(HNR^2)+ RPDE + 
+log(DFA) +log( PPE ) , data = park, smooth = FALSE,pch =19, lower.panel = NULL, col = "#00AFBB", main = 
+"Scatterplot Matrix") 
+Scatter2 
+``` 
+# Confidence interval 
+```{r} 
+# Rounding up by 4 decimal place. 
+round(confint(fit5.park),4) 
+``` 
+# Compute R^2 (Coefficient of determination) and adjusted R^2. 
+```{r} 
+# Comparison 
+c(summary(fit3.park)$r.squared,summary(fit3.park)$adj.r.squared) 
+c(summary(fit5.park)$r.squared,summary(fit5.park)$adj.r.squared) 
+``` 
+
+
+#Research Question:2
+```{r}
+# Fit SVM model
+svm_model <- svm(total_UPDRS ~  HNR + sex, data = parkinsons_updrs, kernel = "linear")
+
+# Predict UPDRS using the SVM model
+
+#predicted_updrs <- predict(svm_model, new data = parkinsons_updrs)
+predictions <- predict(svm_model, data= parkinsons_updrs)
+plot(predictions)
+
+
+# Summary of SVM model
+summary(svm_model)
+```
+
+
+```{r}
+# Assuming you have the actual values (actual) and predicted values (predicted)
+actual <- c(parkinsons_updrs$total_UPDRS)  # Actual target values
+predicted <- c(predictions)  # Predicted values from the SVM model
+
+# Calculate RMSE
+rmse <- sqrt(mean((actual - predicted)^2))
+
+# Calculate MAE
+mae <- mean(abs(actual - predicted))
+
+# Print the results
+cat("RMSE:", rmse, "\n")
+cat("MAE:", mae, "\n")
+
+# Calculate R-squared
+ssr <- sum((actual - predicted)^2)
+sst <- sum((actual - mean(actual))^2)
+rsquared <- 1 - (ssr / sst)
+
+# Calculate Adjusted R-squared
+sse <- sum((actual - predicted)^2)
+adj_rsquared <- 1 - (sse / sst) * ((n - 1) / (n - p - 1))
+
+# Print the results
+cat("R-squared:", rsquared, "\n")
+cat("Adjusted R-squared:", adj_rsquared, "\n")
+```
+
+#Research Question-3:
+```{r}
+# Build the initial decision tree
+tree <- rpart(total_UPDRS ~ PPE + sex, data = parkinsons_updrs, control = rpart.control(cp = 0.0001))
+
+# Identify the best cp value to use
+best <- tree$cptable[which.min(tree$cptable[,"xerror"]), "CP"]
+
+# Produce a pruned tree based on the best cp value
+pruned_tree <- prune(tree, cp = best)
+
+# Plot the pruned tree
+prp(pruned_tree, faclen = 0, extra = 1, roundint = FALSE, digits = 5)
+
+# Create a variable importance plot
+var_importance <- vip(pruned_tree, num_features = 10)
+print(var_importance)
+```
+
+#Research Question-4
+```{r}
+# Split the data into features and target variable
+X <- parkinsons_updrs[, -which(names(parkinsons_updrs) == "total_UPDRS")]  # Exclude the total_UPDRS column
+y <- parkinsons_updrs$total_UPDRS
+
+# Perform feature scaling (important for Lasso)
+X_scaled <- scale(X)
+
+# Perform Lasso regression with cross-validation
+lasso_fit <- cv.glmnet(X_scaled, y, alpha = 1)  # alpha = 1 for Lasso
+
+# Get the optimal lambda value
+optimal_lambda <- lasso_fit$lambda.min
+
+# Refit the Lasso model with the optimal lambda
+optimal_model <- glmnet(X_scaled, y, alpha = 1, lambda = optimal_lambda)
+
+# Extract coefficients from the optimal model
+lasso_coefficients <- coef(optimal_model, s = optimal_lambda)
+lasso_coefficients
+```
+
+
+```{r}
+# Print the selected features and their coefficients
+selected_features <- names(which(lasso_coefficients != 0))
+selected_features
+print(lasso_coefficients[which(lasso_coefficients != 0)])
+```
+
+
+
+# Research Question 5:
+
+```{r}
+# Preprocess the data by centering and scaling numerical variables
+data_scaled <- scale(parkinsons_updrs[, -c(1, 3)]) 
+
+# Perform PCA
+pca_result <- prcomp(data_scaled)
+
+# Print PCA result
+print("PCA Result is:")
+print(pca_result)
+
+# Explained variance
+variance_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+# Print Variance result
+print("\nVariance Result is:")
+print(variance_explained)
+
+```
+```{r}
+
+# Scree plot
+fviz_eig(pca_result, addlabels = TRUE)
+
+# Default plot - Individual PCA by grouping Sex
+fviz_pca_ind(pca_result, label="none", col.ind = "#00AFBB", repel = TRUE)
+
+# Default plot - Variable PCA
+fviz_pca_var(pca_result, col.var="contrib", repel = TRUE)+
+  theme_minimal()
+
+# Biplots
+fviz_pca_biplot(pca_result, label = "var", col.ind = "cos2",
+                gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE)
+```
+
+```{r}
+# Create a new dataset with only the first three principal components
+pca_components <- as.data.frame(pca_result$x[, 1:3])
+
+# Add UPDRS to the new dataset
+pca_components$total_UPDRS <- parkinsons_updrs$total_UPDRS
+
+
+# Linear regression to predict UPDRS using the principal components
+model_total_UPDRS <- lm(total_UPDRS ~ ., data = pca_components)
+
+
+# Print the model summary
+summary(model_total_UPDRS)
+```
+
+#Cross Validation
+```{r}
+
+# Define the trainControl for cross-validation
+ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, verboseIter = TRUE)
+
+# Train the model using lasso regression
+model1 <- train(total_UPDRS ~ ., data = pca_components, method = "glmnet", trControl = ctrl)
+
+# Predict "total_UPDRS" on the testing set
+test_predictions1 <- predict(model1, newdata = pca_components)
+
+# Calculate RMSE (Root Mean Squared Error)
+rmse <- sqrt(mean((test_predictions1 - pca_components$total_UPDRS)^2))
+cat("Root Mean Squared Error:", rmse, "\n")
+
+# Visualize the predicted vs. actual values
+plot(pca_components$total_UPDRS, test_predictions1, xlab = "Actual Total UPDRS", ylab = "Predicted Total UPDRS",
+     main = "Actual vs. Predicted Total UPDRS", pch = 16, col = "#008080")
+abline(a = 0, b = 1, col = "red")
+```
+
