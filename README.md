@@ -1,1 +1,1 @@
-# Parkinson-s-Disease-Severity
+# Parkinson-Disease-Severity
